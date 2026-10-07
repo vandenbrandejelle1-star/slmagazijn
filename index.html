@@ -46,7 +46,14 @@ nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid 
 <div id="toast" class="toast hidden"></div>
 <script>
 const DEFAULT={"materials": [{"qr": "MAGIC FX CO2 SET|2xJET|2X FLES KOPPELING|1X T SPLITTER|1X SLEUTEL 22|1X ZAKJE RINGEN|2X POWERCON|4X HAAK", "name": "MAGIC FX CO2 SET", "type": "Hoofdmateriaal", "parent": "", "status": "Binnen"}, {"qr": "ACC-002", "name": "2x JET", "type": "Accessoire", "parent": "MAGIC FX CO2 SET", "status": "Binnen"}, {"qr": "ACC-003", "name": "2x FLES KOPPELING", "type": "Accessoire", "parent": "MAGIC FX CO2 SET", "status": "Binnen"}, {"qr": "ACC-004", "name": "1x T-SPLITTER", "type": "Accessoire", "parent": "MAGIC FX CO2 SET", "status": "Binnen"}, {"qr": "ACC-005", "name": "1x SLEUTEL 22", "type": "Accessoire", "parent": "MAGIC FX CO2 SET", "status": "Binnen"}, {"qr": "ACC-006", "name": "1x ZAKJE RINGEN", "type": "Accessoire", "parent": "MAGIC FX CO2 SET", "status": "Binnen"}, {"qr": "ACC-007", "name": "2x POWERCON", "type": "Accessoire", "parent": "MAGIC FX CO2 SET", "status": "Binnen"}, {"qr": "ACC-008", "name": "4x HAAK", "type": "Accessoire", "parent": "MAGIC FX CO2 SET", "status": "Binnen"}, {"qr": "Behringer u-phoria umc202hd", "name": "Behringer U-Phoria", "type": "Audio", "parent": "", "status": "Binnen"}], "projects": [{"id": "P-001", "customer": "Voorbeeld klant", "event": "Voorbeeld event", "date": "", "status": "Actief"}]};
-let state=JSON.parse(localStorage.getItem('af_qr_v2')||'null')||{materials:DEFAULT.materials,projects:DEFAULT.projects,scans:[]};
+let saved=JSON.parse(localStorage.getItem('af_qr_v2')||'null');
+let state=saved||{materials:DEFAULT.materials,projects:DEFAULT.projects,scans:[]};
+if(saved){
+  const existingQrs=new Set(state.materials.map(m=>String(m.qr||'').toLowerCase().trim()));
+  DEFAULT.materials.forEach(m=>{if(!existingQrs.has(String(m.qr||'').toLowerCase().trim())){state.materials.push({...m});}});
+  const existingProjects=new Set(state.projects.map(p=>String(p.id||'').toLowerCase().trim()));
+  DEFAULT.projects.forEach(p=>{if(!existingProjects.has(String(p.id||'').toLowerCase().trim())){state.projects.push({...p});}});
+}
 if(!state.scans)state.scans=[];let scanner=null,scanning=false,lastScan='',lastScanAt=0;
 const $=id=>document.getElementById(id);
 function save(){localStorage.setItem('af_qr_v2',JSON.stringify(state));render();}
