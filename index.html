@@ -31,7 +31,7 @@ nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid 
 <div id="status" class="status">Klaar om te scannen.</div>
 <p class="small">Binnen → scan = UIT. Buiten → scan = IN. Voor UIT is een actief project nodig.</p></div>
 <div class="card"><h2>🔎 Handmatig testen</h2><input id="manual" placeholder="Plak of typ QR-waarde"><button id="manualBtn">VERWERK SCAN</button></div>
-<div class="card"><h2>📊 Voorraad</h2><div class="statgrid">
+<div class="card"><h2>📊 Voorraad</h2><button id="refreshStock" class="secondary">☁️ VOORRAAD VERNIEUWEN</button><div class="statgrid">
 <div class="stat"><div class="num" id="total">0</div><div class="small">Totaal</div></div>
 <div class="stat"><div class="num" id="inside">0</div><div class="small">Binnen</div></div>
 <div class="stat"><div class="num" id="outside">0</div><div class="small">Buiten</div></div></div></div></section>
@@ -56,6 +56,57 @@ function norm(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').t
 function findMat(q){const nq=norm(q);return state.materials.find(m=>{const nm=norm(m.qr);return nq===nm||nq.includes(nm)||nm.includes(nq)})}
 function initProjects(){const s=$('project');s.innerHTML='';state.projects.filter(p=>p.status!=='Inactief').forEach(p=>{let o=document.createElement('option');o.value=p.id;o.textContent=p.id+' — '+(p.event||p.customer||'');s.appendChild(o)});projectInfo()}
 function projectInfo(){const p=state.projects.find(x=>x.id===$('project').value);$('projectInfo').textContent=p?((p.customer||'')+(p.customer&&p.event?' • ':'')+(p.event||'')):''}
+
+
+function getVoorraadFromGoogle(){
+  return new Promise((resolve,reject)=>{
+    const callback='afVoorraad_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+    const script=document.createElement('script');
+    let done=false;
+    const cleanup=()=>{
+      if(done)return;
+      done=true;
+      clearTimeout(timer);
+      delete window[callback];
+      script.remove();
+    };
+    const timer=setTimeout(()=>{
+      cleanup();
+      reject(new Error('Google Sheets reageert niet bij voorraad laden.'));
+    },10000);
+    window[callback]=(result)=>{
+      cleanup();
+      if(result&&result.ok) resolve(result);
+      else reject(new Error(result?.fout||'Voorraad kon niet worden geladen.'));
+    };
+    script.onerror=()=>{
+      cleanup();
+      reject(new Error('Verbinding met Google Sheets mislukt.'));
+    };
+    script.src=GOOGLE_SCRIPT_URL+'?callback='+encodeURIComponent(callback)+'&actie=voorraad';
+    document.body.appendChild(script);
+  });
+}
+
+async function syncVoorraad(){
+  try{
+    const result=await getVoorraadFromGoogle();
+    if(Array.isArray(result.materialen)){
+      state.materials=result.materialen.map(m=>({
+        qr:m.qr,
+        name:m.naam,
+        type:m.type||'',
+        parent:'',
+        status:m.status||'Binnen',
+        aantal:Number(m.aantal||1)
+      }));
+      render();
+    }
+  syncVoorraad();
+  }catch(err){
+    console.warn('Voorraad sync mislukt:',err);
+  }
+}
 
 function sendToGoogleSheets(qr,project){
   return new Promise((resolve,reject)=>{
@@ -142,15 +193,15 @@ function setStatus(t,c){$('status').textContent=t;$('status').className='status 
 async function startScan(){if(scanning)return;try{scanner=new Html5Qrcode('reader');const cams=await Html5Qrcode.getCameras();if(!cams.length)throw Error('Geen camera gevonden');let cam=cams.find(c=>/back|rear|environment/i.test(c.label))||cams[0];await scanner.start(cam.id,{fps:10,qrbox:{width:250,height:250},aspectRatio:1},processScan,()=>{});scanning=true;setStatus('Camera actief — richt op je QR.','ok')}catch(e){setStatus('Camera niet gestart: '+e.message,'err')}}
 async function stopScan(){if(scanner&&scanning){await scanner.stop();scanner.clear();scanning=false}}
 function esc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function render(){let total=state.materials.length,out=state.materials.filter(m=>m.status==='Buiten').length;$('total').textContent=total;$('outside').textContent=out;$('inside').textContent=total-out;
-let q=($('search')?.value||'').toLowerCase();let arr=state.materials.filter(m=>(m.name+' '+m.qr+' '+m.type).toLowerCase().includes(q));$('items').innerHTML=arr.map(m=>'<div class="item"><div><b>'+esc(m.name)+'</b><div class="small">'+esc(m.qr)+'</div></div><span class="badge '+(m.status==='Buiten'?'buiten':'binnen')+'">'+m.status+'</span></div>').join('')||'<p class="small">Geen materiaal.</p>';
+function render(){let total=state.materials.reduce((sum,m)=>sum+Number(m.aantal||1),0),out=state.materials.filter(m=>m.status==='Buiten').reduce((sum,m)=>sum+Number(m.aantal||1),0);$('total').textContent=total;$('outside').textContent=out;$('inside').textContent=total-out;
+let q=($('search')?.value||'').toLowerCase();let arr=state.materials.filter(m=>(m.name+' '+m.qr+' '+m.type).toLowerCase().includes(q));$('items').innerHTML=arr.map(m=>'<div class="item"><div><b>'+esc(m.name)+'</b><div class="small">'+esc(m.qr)+' • Aantal: '+esc(m.aantal||1)+'</div></div><span class="badge '+(m.status==='Buiten'?'buiten':'binnen')+'">'+m.status+'</span></div>').join('')||'<p class="small">Geen materiaal.</p>';
 $('history').innerHTML=state.scans.slice(0,100).map(s=>'<div class="item"><div><b>'+esc(s.name)+'</b><div class="small">'+esc(s.action)+' • '+new Date(s.time).toLocaleString('nl-BE')+' • '+esc(s.project||'')+'</div></div><span class="badge '+(s.action==='UIT'?'buiten':'binnen')+'">'+esc(s.action)+'</span></div>').join('')||'<p class="small">Nog geen scans.</p>'}
-$('start').onclick=startScan;$('stop').onclick=stopScan;$('manualBtn').onclick=()=>{processScan($('manual').value);$('manual').value=''};$('project').onchange=projectInfo;$('search').oninput=render;
+$('start').onclick=startScan;$('stop').onclick=stopScan;$('refreshStock').onclick=()=>syncVoorraad();$('manualBtn').onclick=()=>{processScan($('manual').value);$('manual').value=''};$('project').onchange=projectInfo;$('search').oninput=render;
 $('clear').onclick=()=>{if(confirm('Alle scanhistorie op dit toestel wissen?')){state.scans=[];state.materials.forEach(m=>m.status='Binnen');save()}};
 $('add').onclick=()=>{let qr=$('newQr').value.trim(),name=$('newName').value.trim();if(!qr||!name)return toast('Vul QR en naam in.');if(findMat(qr))return toast('Deze QR bestaat al.');state.materials.push({qr:qr,name:name,type:$('newType').value.trim(),parent:'',status:'Binnen'});save();$('newQr').value='';$('newName').value='';$('newType').value='';toast('Materiaal toegevoegd.')};
 $('import').onclick=()=>{let f=$('file').files[0];if(!f)return toast('Kies eerst een Excel/CSV-bestand.');let r=new FileReader();r.onload=e=>{try{let wb=XLSX.read(e.target.result,{type:'array'});let ws=wb.Sheets['Materiaal']||wb.Sheets[wb.SheetNames[0]];let rows=XLSX.utils.sheet_to_json(ws,{defval:''});let ms=rows.map(x=>({qr:String(x['QR sleutel']||x['QR']||x['Code']||'').trim(),name:String(x['Materiaal']||x['Beschrijving']||x['Name']||x['Description']||'').trim(),type:String(x['Type']||x['Category']||'').trim(),parent:String(x['Hoort bij']||x['Parent']||'').trim(),status:String(x['Status']||'Binnen').trim()||'Binnen'})).filter(x=>x.qr&&x.name);if(!ms.length)throw Error('Geen materiaal gevonden in sheet Materiaal');state.materials=ms;let ps=wb.Sheets['Projecten'];if(ps)state.projects=XLSX.utils.sheet_to_json(ps,{defval:''}).map(x=>({id:String(x['Project ID']||'').trim(),customer:String(x['Klant']||''),event:String(x['Project / Event']||''),status:String(x['Status']||'Actief')})).filter(x=>x.id);initProjects();save();toast(ms.length+' materialen geïmporteerd.')}catch(err){toast('Import mislukt: '+err.message)}};r.readAsArrayBuffer(f)};
 $('export').onclick=()=>{let rows=state.scans.map(s=>({'Scan #':s.n,'QR sleutel':s.qr,'Materiaal':s.name,'Actie':s.action,'Tijdstip':s.time,'Project ID':s.project,'Klant / Project':s.projectName}));let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Scans');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.materials.map(m=>({'QR sleutel':m.qr,'Materiaal':m.name,'Type':m.type,'Hoort bij':m.parent,'Status':m.status}))),'Materiaal');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.projects),'Projecten');XLSX.writeFile(wb,'Ambiance_Fabriek_QR_Voorraad.xlsx')};
 $('downloadTemplate').onclick=()=>{let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.materials.map(m=>({'QR sleutel':m.qr,'Materiaal':m.name,'Type':m.type,'Hoort bij':m.parent,'Status':m.status}))),'Materiaal');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.projects),'Projecten');XLSX.writeFile(wb,'Ambiance_Fabriek_QR_Basis.xlsx')};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');['scanPage','itemsPage','historyPage','settingsPage'].forEach(id=>$(id).classList.toggle('hidden',id!==b.dataset.page))});
-initProjects();render();
+initProjects();render();syncVoorraad();
 </script></body></html>
