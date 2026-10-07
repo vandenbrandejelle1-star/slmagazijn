@@ -51,7 +51,14 @@ if(!state.scans)state.scans=[];let scanner=null,scanning=false,lastScan='',lastS
 const $=id=>document.getElementById(id);
 function save(){localStorage.setItem('af_qr_v2',JSON.stringify(state));render();}
 function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),2200)}
-function findMat(q){return state.materials.find(m=>String(m.qr).trim()===String(q).trim())}
+function norm(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ')}
+function findMat(q){
+  const nq=norm(q);
+  return state.materials.find(m=>{
+    const nm=norm(m.qr);
+    return nq===nm || nq.includes(nm) || nm.includes(nq);
+  });
+}
 function initProjects(){const s=$('project');s.innerHTML='';state.projects.filter(p=>p.status!=='Inactief').forEach(p=>{let o=document.createElement('option');o.value=p.id;o.textContent=p.id+' — '+(p.event||p.customer||'');s.appendChild(o)});projectInfo()}
 function projectInfo(){const p=state.projects.find(x=>x.id===$('project').value);$('projectInfo').textContent=p?((p.customer||'')+(p.customer&&p.event?' • ':'')+(p.event||'')):''}
 function processScan(q){q=String(q||'').trim();if(!q)return;let now=Date.now();if(q===lastScan&&now-lastScanAt<1800)return;lastScan=q;lastScanAt=now;
