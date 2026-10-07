@@ -83,7 +83,7 @@ function getProjectenFromGoogle(){
       cleanup();
       reject(new Error('Verbinding met Google Sheets mislukt.'));
     };
-    script.src=GOOGLE_SCRIPT_URL+'?callback='+encodeURIComponent(callback)+'&actie=projecten';
+   script.src=GOOGLE_SCRIPT_URL+'?actie=projecten&callback='+callback;
     document.body.appendChild(script);
   });
 }
