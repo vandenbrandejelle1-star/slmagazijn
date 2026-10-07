@@ -251,6 +251,6 @@ $('downloadTemplate').onclick=()=>{let wb=XLSX.utils.book_new();XLSX.utils.book_
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');['scanPage','itemsPage','historyPage','settingsPage'].forEach(id=>$(id).classList.toggle('hidden',id!==b.dataset.page))});
 initProjects();
 render();
-syncVoorraad().catch(console.error);
-syncProjecten().catch(console.error);
-</script></body></html>
+</script>
+</body>
+</html>
