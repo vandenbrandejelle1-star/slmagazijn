@@ -249,5 +249,8 @@ $('import').onclick=()=>{let f=$('file').files[0];if(!f)return toast('Kies eerst
 $('export').onclick=()=>{let rows=state.scans.map(s=>({'Scan #':s.n,'QR sleutel':s.qr,'Materiaal':s.name,'Actie':s.action,'Tijdstip':s.time,'Project ID':s.project,'Klant / Project':s.projectName}));let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Scans');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.materials.map(m=>({'QR sleutel':m.qr,'Materiaal':m.name,'Type':m.type,'Hoort bij':m.parent,'Status':m.status}))),'Materiaal');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.projects),'Projecten');XLSX.writeFile(wb,'Ambiance_Fabriek_QR_Voorraad.xlsx')};
 $('downloadTemplate').onclick=()=>{let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.materials.map(m=>({'QR sleutel':m.qr,'Materiaal':m.name,'Type':m.type,'Hoort bij':m.parent,'Status':m.status}))),'Materiaal');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.projects),'Projecten');XLSX.writeFile(wb,'Ambiance_Fabriek_QR_Basis.xlsx')};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');['scanPage','itemsPage','historyPage','settingsPage'].forEach(id=>$(id).classList.toggle('hidden',id!==b.dataset.page))});
-initProjects();render();syncVoorraad();syncProjecten();
+initProjects();
+render();
+syncVoorraad().catch(console.error);
+syncProjecten().catch(console.error);
 </script></body></html>
