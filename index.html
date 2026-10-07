@@ -58,6 +58,52 @@ function initProjects(){const s=$('project');s.innerHTML='';state.projects.filte
 function projectInfo(){const p=state.projects.find(x=>x.id===$('project').value);$('projectInfo').textContent=p?((p.customer||'')+(p.customer&&p.event?' • ':'')+(p.event||'')):''}
 
 
+function getProjectenFromGoogle(){
+  return new Promise((resolve,reject)=>{
+    const callback='afProjecten_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+    const script=document.createElement('script');
+    let done=false;
+    const cleanup=()=>{
+      if(done)return;
+      done=true;
+      clearTimeout(timer);
+      delete window[callback];
+      script.remove();
+    };
+    const timer=setTimeout(()=>{
+      cleanup();
+      reject(new Error('Google Sheets reageert niet bij projecten laden.'));
+    },10000);
+    window[callback]=(result)=>{
+      cleanup();
+      if(result&&result.ok) resolve(result);
+      else reject(new Error(result?.fout||'Projecten konden niet worden geladen.'));
+    };
+    script.onerror=()=>{
+      cleanup();
+      reject(new Error('Verbinding met Google Sheets mislukt.'));
+    };
+    script.src=GOOGLE_SCRIPT_URL+'?callback='+encodeURIComponent(callback)+'&actie=projecten';
+    document.body.appendChild(script);
+  });
+}
+
+async function syncProjecten(){
+  try{
+    const selected=$('project').value;
+    const result=await getProjectenFromGoogle();
+    if(Array.isArray(result.projecten) && result.projecten.length){
+      state.projects=result.projecten;
+      initProjects();
+      if(state.projects.some(p=>p.id===selected)) $('project').value=selected;
+      projectInfo();
+      save();
+    }
+  }catch(err){
+    console.warn('Projecten sync mislukt:',err);
+  }
+}
+
 function getVoorraadFromGoogle(){
   return new Promise((resolve,reject)=>{
     const callback='afVoorraad_'+Date.now()+'_'+Math.floor(Math.random()*100000);
@@ -102,7 +148,6 @@ async function syncVoorraad(){
       }));
       render();
     }
-  syncVoorraad();
   }catch(err){
     console.warn('Voorraad sync mislukt:',err);
   }
@@ -183,6 +228,7 @@ async function processScan(q){
 
     save();
     setStatus((action==='UIT'?'🔴 UIT: ':'🟢 IN: ')+(result.materiaal||m.name),action==='UIT'?'out':'ok');
+    setTimeout(()=>syncVoorraad(),300);
     navigator.vibrate?.([80,60,80]);
   }catch(err){
     setStatus('❌ '+err.message,'err');
@@ -203,5 +249,5 @@ $('import').onclick=()=>{let f=$('file').files[0];if(!f)return toast('Kies eerst
 $('export').onclick=()=>{let rows=state.scans.map(s=>({'Scan #':s.n,'QR sleutel':s.qr,'Materiaal':s.name,'Actie':s.action,'Tijdstip':s.time,'Project ID':s.project,'Klant / Project':s.projectName}));let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Scans');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.materials.map(m=>({'QR sleutel':m.qr,'Materiaal':m.name,'Type':m.type,'Hoort bij':m.parent,'Status':m.status}))),'Materiaal');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.projects),'Projecten');XLSX.writeFile(wb,'Ambiance_Fabriek_QR_Voorraad.xlsx')};
 $('downloadTemplate').onclick=()=>{let wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.materials.map(m=>({'QR sleutel':m.qr,'Materiaal':m.name,'Type':m.type,'Hoort bij':m.parent,'Status':m.status}))),'Materiaal');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(state.projects),'Projecten');XLSX.writeFile(wb,'Ambiance_Fabriek_QR_Basis.xlsx')};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');['scanPage','itemsPage','historyPage','settingsPage'].forEach(id=>$(id).classList.toggle('hidden',id!==b.dataset.page))});
-initProjects();render();syncVoorraad();
+initProjects();render();syncVoorraad();syncProjecten();
 </script></body></html>
