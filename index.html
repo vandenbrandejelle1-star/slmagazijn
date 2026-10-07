@@ -100,8 +100,9 @@ async function syncProjecten(){
       save();
     }
   }catch(err){
-    console.warn('Projecten sync mislukt:',err);
-  }
+  alert('Projecten sync fout: ' + err.message);
+  console.error(err);
+}
 }
 
 function getVoorraadFromGoogle(){
